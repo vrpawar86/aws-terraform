@@ -20,7 +20,7 @@ output "eks_oidc_provider_arn" {
   value = data.aws_iam_openid_connect_provider.my_provider.arn
 }
 //---
-#create ALB controller Policy
+#create karpenter controller Policy
 resource "aws_iam_policy" "karpenter_controller_policy" {
   name        = "${var.project_name}-AWSKarpenterControllerPolicy"
   path        = "/"
@@ -32,7 +32,7 @@ resource "aws_iam_policy" "karpenter_controller_policy" {
 }
 
 //---
-#ALB Controller Role
+#Karpenter Controller Role
 resource "aws_iam_role" "karpenter_controller_role" {
   name               = "${var.project_name}-AmazonEKSKarpenterControllerRole"
   assume_role_policy = data.aws_iam_policy_document.karpenter_controller_role_policy.json
@@ -64,7 +64,7 @@ data "aws_iam_policy_document" "karpenter_controller_role_policy" {
   }
 }
 //------------------------------------------------------------------------------------------
-#Attach ALB CONTROLLER Policy to Above Role
+#Attach karpenter CONTROLLER Policy to Above Role
 resource "aws_iam_role_policy_attachment" "attach_karpenter_controller_policy" {
   role       = aws_iam_role.karpenter_controller_role.name
   policy_arn = aws_iam_policy.karpenter_controller_policy.arn
@@ -76,7 +76,7 @@ resource "aws_iam_role_policy_attachment" "attach_karpenter_controller_policy" {
 }
 
 //---
-#
+#Installing Karpenter in Cluster
 
 resource "helm_release" "karpenter" {
   name       = "karpenter"
