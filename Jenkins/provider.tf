@@ -47,6 +47,15 @@ data "aws_eks_cluster_auth" "my_cluster_auth" {
 # }
 //---
 
+# terraform {
+#   required_providers {
+#     kubernetes = {
+#       source = "hashicorp/kubernetes"
+#       version = ">=2.18.1"
+#     }
+#   }
+# }
+
 provider "kubernetes" {
   
   # config_context_cluster = var.cluster_name
@@ -63,6 +72,15 @@ provider "kubernetes" {
 }
 
 //----
+
+# terraform {
+#   required_providers {
+#     helm = {
+#       source = "hashicorp/helm"
+#       version = ">=2.9.0"
+#     }
+#   }
+# }
 
 provider "helm" {
   kubernetes {

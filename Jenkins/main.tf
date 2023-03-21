@@ -65,11 +65,18 @@ data "aws_subnet" "subnet_private_1c" {
 # }
 
 //------------------------------------------------------------------------------------------
+#Adding EFS Access Policy to NodeGroup Role
+resource "aws_iam_role_policy_attachment" "attach_route53_policy" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonElasticFileSystemFullAccess"
+  role       = "${var.project_name}-eksNodeGroupRole"
+}
+
+//------------------------------------------------------------------------------------------
 #create EFS_CSI_Driver Policy
 resource "aws_iam_policy" "efs_driver_policy" {
   name        = "${var.project_name}-AmazonEKS_EFS_CSI_Driver_Policy"
   path        = "/"
-  description = "Policy for AAmazonEKS_EFS_CSI_Driver"
+  description = "Policy for AmazonEKS_EFS_CSI_Driver"
   tags = {
     Name = "${var.project_name}-AmazonEKS_EFS_CSI_Driver_Policy"
   }
@@ -129,6 +136,9 @@ resource "kubernetes_service_account" "efs_csi_controller_sa" {
       "eks.amazonaws.com/role-arn" = aws_iam_role.ebs_csi.arn
     }
   }
+  depends_on = [
+    aws_iam_role_policy_attachment.attach_ebs_csi_policy
+  ]
 }
 //------------------------------------------------------------------------------------------
 #EFS file system
@@ -142,6 +152,9 @@ resource "aws_efs_file_system" "jenkins_fs" {
   tags = {
     Name = "${var.project_name}-EFS"
   }
+  depends_on = [
+    kubernetes_service_account.efs_csi_controller_sa
+  ]
 }
 
 //------------------------------------------------------------------------------------------
@@ -161,6 +174,9 @@ resource "aws_efs_access_point" "jenkins_ap" {
       permissions = 777
       }
   }
+  depends_on = [
+    aws_efs_file_system.jenkins_fs
+  ]  
 }
 
 //------------------------------------------------------------------------------------------
@@ -191,6 +207,9 @@ resource "aws_security_group" "efs_mount_sg" {
   tags = {
     Name = "${var.project_name}-efs-sg"
   }
+  depends_on = [
+    aws_efs_access_point.jenkins_ap
+  ]
 }
 
 //------------------------------------------------------------------------------------------
@@ -201,6 +220,10 @@ resource "aws_efs_mount_target" "jenkins_mt1" {
   file_system_id = aws_efs_file_system.jenkins_fs.id
   subnet_id = data.aws_subnet.subnet_private_1a.id
   security_groups = [aws_security_group.efs_mount_sg.id]
+  
+  depends_on = [
+    aws_security_group.efs_mount_sg
+  ]  
 }
 
 resource "aws_efs_mount_target" "jenkins_mt2" {
@@ -208,6 +231,10 @@ resource "aws_efs_mount_target" "jenkins_mt2" {
   file_system_id = aws_efs_file_system.jenkins_fs.id
   subnet_id = data.aws_subnet.subnet_private_1b.id
   security_groups = [aws_security_group.efs_mount_sg.id]
+
+  depends_on = [
+    aws_security_group.efs_mount_sg
+  ] 
 }
 
 resource "aws_efs_mount_target" "jenkins_mt3" {
@@ -215,6 +242,10 @@ resource "aws_efs_mount_target" "jenkins_mt3" {
   file_system_id = aws_efs_file_system.jenkins_fs.id
   subnet_id = data.aws_subnet.subnet_private_1c.id
   security_groups = [aws_security_group.efs_mount_sg.id]
+
+  depends_on = [
+    aws_security_group.efs_mount_sg
+  ]   
 }
 
 //------------------------------------------------------------------------------------------
@@ -223,6 +254,9 @@ resource "aws_efs_mount_target" "jenkins_mt3" {
 resource "helm_release" "Persistent-Volume" {
   name = "persistent-volume"
   chart = "./Persistent-Volume"
+  namespace  = "jenkins"
+  create_namespace = true
+
   depends_on = [
     aws_efs_mount_target.jenkins_mt1
   ]
@@ -242,8 +276,9 @@ resource "helm_release" "aws-efs-csi-driver" {
   chart      = "aws-efs-csi-driver"
   namespace  = "kube-system"
   depends_on = [
-    kubernetes_service_account.efs_csi_controller_sa
-  ]  
+    kubernetes_service_account.efs_csi_controller_sa,
+    helm_release.Persistent-Volume
+  ]
 
   set {
     name  = "controller.serviceAccount.name"
@@ -267,9 +302,9 @@ resource "helm_release" "jenkins" {
   repository = "https://charts.jenkins.io/"
   chart      = "jenkins"
   namespace  = "jenkins"
-  create_namespace = true
   depends_on = [
-    helm_release.aws-efs-csi-driver
+    helm_release.aws-efs-csi-driver,
+    helm_release.Persistent-Volume
   ]
 
   values = [
